@@ -531,3 +531,41 @@ body {
     gap: 5px;
     align-items: center;
 }
+
+
+/* Update or Add this to style.css */
+
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 400px; /* Fixed height for the whole chat box */
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden; /* Keeps children inside rounded corners */
+}
+
+.chat-messages {
+    flex: 1; /* Takes up all available space above input */
+    padding: 15px;
+    overflow-y: auto; /* THIS ADDS THE SCROLLBAR */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: #f9f9f9;
+}
+
+/* Optional: Make the scrollbar look nicer */
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1; 
+}
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #ccc; 
+    border-radius: 4px;
+}
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #aaa; 
+}
