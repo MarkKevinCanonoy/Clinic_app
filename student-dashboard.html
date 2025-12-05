@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="style.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <header class="top-bar">
+        <div class="header-content">
+            <div class="brand">
+                <i class="fas fa-graduation-cap"></i>
+                <h1>Student Dashboard</h1>
+            </div>
+            <div class="user-info">
+                <span id="user-name">Welcome, Student</span>
+                <button onclick="logout()" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <main class="dashboard">
+            
+            <div class="dashboard-tabs">
+                <button class="tab-btn active" onclick="showTab('booking')">
+                    <i class="fas fa-calendar-plus"></i> Book Appointment
+                </button>
+                <button class="tab-btn" onclick="showTab('chatbot')">
+                    <i class="fas fa-robot"></i> AI Assistant
+                </button>
+                <button class="tab-btn" onclick="showTab('appointments')">
+                    <i class="fas fa-list"></i> My Appointments
+                </button>
+            </div>
+<div id="booking-tab" class="tab-content active">
+                <div class="booking-card-wrapper">
+                    <div class="booking-header-banner">
+                        <div class="banner-icon">
+                            <i class="fas fa-notes-medical"></i>
+                        </div>
+                        <div class="banner-text">
+                            <h2>Book Appointment</h2>
+                            <p>Schedule a visit with the school clinic.</p>
+                        </div>
+                    </div>
+                    
+                    <form id="booking-form" onsubmit="handleBooking(event)" class="booking-form-body">
+                        
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label><i class="fas fa-stethoscope"></i> Service Type</label>
+                                <select id="book-type" required>
+                                    <option value="" disabled selected>Select service...</option>
+                                    <option value="Medical Consultation">Medical Consultation</option>
+                                    <option value="Medical Clearance">Medical Clearance</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label><i class="far fa-calendar-alt"></i> Date</label>
+                                <input type="date" id="book-date" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label><i class="far fa-clock"></i> Preferred Time</label>
+                                <input type="time" id="book-time" required>
+                            </div>
+                            <div class="input-group">
+                                <label><i class="fas fa-exclamation-circle"></i> Urgency</label>
+                                <select id="book-urgency">
+                                    <option value="Normal">Normal</option>
+                                    <option value="Urgent">Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label><i class="fas fa-comment-medical"></i> Reason for Visit</label>
+                            <textarea id="book-reason" rows="3" placeholder="Please describe your symptoms or concern..." required></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary btn-submit-booking">
+                                Confirm Booking <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="chatbot-tab" class="tab-content">
+                <div class="chat-wrapper">
+                    <div class="chat-header">
+                        <h2>Clinic AI Assistant</h2>
+                        <span style="font-size: 0.8rem;">● Online</span>
+                    </div>
+                    <div class="chat-container">
+                        <div id="chat-messages" class="chat-messages">
+                            <div class="chat-message bot">Hello! I am the Clinic AI. How can I help you today?</div>
+                        </div>
+                        <div class="chat-input-container">
+                            <input type="text" id="chat-input" placeholder="Type your message..." onkeypress="handleEnter(event)">
+                            <button onclick="sendMessage()" class="btn-send">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="appointments-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>My Appointments</h2>
+                    <div>
+                        <select id="status-filter" onchange="filterAppointments()" style="padding: 8px; border-radius:5px; border:1px solid #ddd;">
+                            <option value="all">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="canceled">Canceled</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="appointments-list" class="appointments-grid">
+                    <div class="appointment-card status-pending" data-status="pending">
+                        <div class="apt-header">
+                            <span class="apt-date">Oct 24, 2025</span>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+                        <div class="apt-body">
+                            <p><strong>Time:</strong> 10:00 AM</p>
+                            <p><strong>Reason:</strong> Consultation regarding medical clearance.</p>
+                        </div>
+                        <button class="btn-cancel" onclick="cancelAppointment(this)">Cancel Request</button>
+                    </div>
+                    
+                    <div class="appointment-card status-approved" data-status="approved">
+                        <div class="apt-header">
+                            <span class="apt-date">Oct 20, 2025</span>
+                            <span class="status-pill approved" style="background:#e8f5e9; color:#2e7d32;">Approved</span>
+                        </div>
+                        <div class="apt-body">
+                            <p><strong>Time:</strong> 01:00 PM</p>
+                            <p><strong>Reason:</strong> Dental Checkup.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <footer class="footer">
+        <p>© 2025 Eastern Visayas State University - Ormoc Campus</p>
+    </footer>
+
+    <script src="student-dashboard.js"></script>
+</body>
+</html>
