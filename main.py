@@ -12,7 +12,7 @@ import os
 import re 
 
 # --- GLOBAL STATE STORAGE (In-Memory) ---
-chat_states: Dict[int, Dict] = {}
+#chat_states: Dict[int, Dict] = {}
 
 app = FastAPI()
 
@@ -326,7 +326,7 @@ def get_users(current_user = Depends(get_current_user)):
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT id, full_name, email, role, created_at FROM users WHERE role IN ('admin', 'super_admin')")
+        cursor.execute("SELECT id, full_name, email, role, created_at FROM users ORDER BY created_at DESC")
         results = cursor.fetchall()
         for row in results:
             row['created_at'] = str(row['created_at'])
@@ -357,139 +357,180 @@ def delete_user(user_id: int, current_user = Depends(get_current_user)):
 # ==========================================
 #   logic based chatbot for booking appointments
 # ==========================================
+# global dictionary to store user states in memory
+chat_states = {}
 
 @app.post("/api/chat")
 async def chat_booking(chat: ChatMessage, current_user = Depends(get_current_user)):
     """
-    Enhanced Logic-Based Chatbot with "Personality"
+    Smart Logic-Based Chatbot.
+    It can "read" a full sentence and extract details automatically.
     """
     
-    # access control part
+    # access Control
     if current_user['role'] != 'student':
         return {"response": "Sorry, only students can book appointments.", "requires_action": False}
 
     user_id = current_user['user_id']
     message = chat.message.strip().lower()
 
-    # initialize state
+    # initialize State if new
     if user_id not in chat_states:
         chat_states[user_id] = {"step": "idle", "data": {}}
 
     state = chat_states[user_id]
-    step = state["step"]
-
-    # cancel
-    if "cancel" in message or "stop" in message or "reset" in message:
+    
+    # --- RESET LOGIC ---
+    if any(w in message for w in ["cancel", "stop", "reset", "wrong"]):
         chat_states[user_id] = {"step": "idle", "data": {}}
-        return {"response": "Okay, I've canceled the current booking process. 🔄 Say 'Hi' or 'Book' to start again.", "requires_action": False}
+        return {"response": "Okay, I've cleared everything. 🔄 Start again by saying 'Hi' or 'Book'.", "requires_action": False}
 
     response_text = ""
+
+    # ==================================================
+    # runs ALWAYS. it tries to pick up details from ANY message.
+    # ==================================================
+    current_data = state["data"]
+
+    # detect Service Type
+    if "consultation" in message:
+        current_data["service_type"] = "Medical Consultation"
+    elif "clearance" in message:
+        current_data["service_type"] = "Medical Clearance"
+
+    # detect Urgency
+    if "urgent" in message:
+        current_data["urgency"] = "Urgent"
+    elif "normal" in message:
+        current_data["urgency"] = "Normal"
+
+    # detect Date (Format: YYYY-MM-DD)
+    date_match = re.search(r'\d{4}-\d{2}-\d{2}', message)
+    if date_match:
+        current_data["appointment_date"] = date_match.group(0)
+    elif "tomorrow" in message:
+        current_data["appointment_date"] = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     
+    # detect Time (Format: HH:MM)
+    time_match = re.search(r'\d{1,2}:\d{2}', message)
+    if time_match:
+        raw_time = time_match.group(0)
+        if len(raw_time) == 4: raw_time = "0" + raw_time # Fix 9:00 to 09:00
+        current_data["appointment_time"] = raw_time + ":00"
+
+    # detect Reason (Looks for "because" or "for")
+    # example: "because I have asthma" -> saves "I have asthma"
+    if "because" in message:
+        parts = message.split("because", 1)
+        if len(parts) > 1:
+            current_data["reason"] = parts[1].strip()
+    elif "reason is" in message:
+        parts = message.split("reason is", 1)
+        if len(parts) > 1:
+            current_data["reason"] = parts[1].strip()
+
+    # save the updated data back to state
+    chat_states[user_id]["data"] = current_data
+
     # ==================================================
-    # handles start, greetings, thanks
+    # it checks what is missing and jumps to that step.
     # ==================================================
-    if step == "idle":
-        # to trigger booking
-        if "book" in message or "appointment" in message or "schedule" in message:
-            chat_states[user_id]["step"] = "asking_service"
-            response_text = "I'd love to help you with that! 🩺 \n\nWhat type of service do you need? (e.g., Medical Consultation, Medical Clearance)"
+    
+    # if we are in "idle", we check if the user wants to start
+    if state["step"] == "idle":
+        triggers = ["book", "appointment", "schedule", "visit", "consultation", "clearance"]
         
-        # greetings
-        elif "hello" in message or "hi" in message or "hey" in message:
-            response_text = "Hello! 👋 I am the Clinic AI. I can help you schedule a visit.\n\nJust say 'Book appointment' to get started!"
+        # if user says "Hi", just greet
+        if any(w in message for w in ["hi", "hello", "hey"]) and not any(w in message for w in triggers):
+            return {"response": "Hello! 👋 I am the Clinic AI.\n\nYou can say 'Book appointment' or tell me full details like: 'Book medical consultation tomorrow at 10:00 because I have a fever'.", "requires_action": False}
         
-        # gratitude - handles "Thank you" after booking
-        elif any(word in message for word in ["thank", "thanks", "tysm", "salamat"]):
-            response_text = "You're very welcome! 😊 I'm happy I could help. \n\nStay healthy! Let me know if you need anything else."
+        # if user implies booking (or extracted data exists), start the flow
+        if any(w in message for w in triggers) or len(current_data) > 0:
+            state["step"] = "check_requirements" # move to checking phase
+
+    # ==================================================
+    # eXECUTE STEPS
+    # ==================================================
+
+    # this "check_requirements" step acts as a Traffic Controller
+    if state["step"] == "check_requirements":
+        data = state["data"]
         
-        # closings
-        elif "bye" in message or "goodbye" in message:
-            response_text = "Goodbye! Take care of yourself! 👋"
-
-        # general agreement
-        elif any(word in message for word in ["ok", "okay", "cool", "great", "nice"]):
-            response_text = "Great! 👍 I'm here if you need to book a schedule."
-
-        # fallback
-        else:
-            response_text = "I'm listening! 👂 You can say 'Book appointment' to start, or just say 'Hello'."
-
-    # ==================================================
-    # asking service
-    # ==================================================
-    elif step == "asking_service":
-        if "medical" in message or "dental" in message or "consultation" in message or "clearance" in message:
-            service_val = "Medical Consultation"
-            if "clearance" in message: service_val = "Medical Clearance"
-            
-            chat_states[user_id]["data"]["service_type"] = service_val
-            chat_states[user_id]["step"] = "asking_date"
-            response_text = f"Got it: {service_val}. 🗓️ \n\nWhat date would you like? (Format: YYYY-MM-DD, or just say 'tomorrow')"
-        else:
-            response_text = "I didn't quite catch that. 🤔 \n\nPlease specify: 'Medical Consultation' or 'Medical Clearance'."
-
-    # ==================================================
-    # asking date
-    # ==================================================
-    elif step == "asking_date":
-        chosen_date = None
-        if "tomorrow" in message:
-            chosen_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-        else:
-            match = re.search(r'\d{4}-\d{2}-\d{2}', message)
-            if match:
-                chosen_date = match.group(0)
+        # do we have Service?
+        if "service_type" not in data:
+            state["step"] = "asking_service"
+            return {"response": "I can help with that! 🩺\n\nIs this for a **Medical Consultation** or **Medical Clearance**?", "requires_action": False}
         
-        if chosen_date:
-            chat_states[user_id]["data"]["appointment_date"] = chosen_date
-            chat_states[user_id]["step"] = "asking_time"
-            response_text = f"Date set to {chosen_date}. ✅ \n\nWhat time works best? (Format: HH:MM, e.g., 09:30 or 14:00)"
+        # do we have Date?
+        if "appointment_date" not in data:
+            state["step"] = "asking_date"
+            return {"response": f"Okay, a {data['service_type']}. 🗓️\n\nWhat date? (Format: YYYY-MM-DD or say 'tomorrow')", "requires_action": False}
+
+        # do we have Time?
+        if "appointment_time" not in data:
+            state["step"] = "asking_time"
+            return {"response": f"Got the date ({data['appointment_date']}). 🕒\n\nWhat time? (Format: HH:MM, e.g., 09:00 or 14:00)", "requires_action": False}
+
+        # do we have Urgency?
+        if "urgency" not in data:
+            state["step"] = "asking_urgency"
+            return {"response": "Noted. Is this condition **Normal** or **Urgent**?", "requires_action": False}
+
+        # do we have Reason?
+        if "reason" not in data:
+            state["step"] = "asking_reason"
+            return {"response": "Almost done! 📝\n\nPlease briefly state the **reason** for your visit.", "requires_action": False}
+
+        # If ALL data is present, go to Save
+        state["step"] = "saving"
+
+    # --- HANDLING SPECIFIC QUESTIONS (If missing specific data) ---
+
+    if state["step"] == "asking_service":
+        # logic handled by Step 1 extraction. If failed:
+        if "service_type" not in current_data:
+            return {"response": "I didn't catch the service type. Please type 'Medical Consultation' or 'Medical Clearance'.", "requires_action": False}
         else:
-            response_text = "Oops, that looks like an invalid date. 📅 \n\nPlease use YYYY-MM-DD (e.g., 2025-10-25) or just say 'tomorrow'."
+            state["step"] = "check_requirements" # Go back to traffic controller
+            # Recursive call to handle next step immediately (optional, but cleaner to just return)
+            return await chat_booking(chat, current_user)
+
+    if state["step"] == "asking_date":
+        if "appointment_date" not in current_data:
+            return {"response": "Please provide a valid date (YYYY-MM-DD) or say 'tomorrow'.", "requires_action": False}
+        state["step"] = "check_requirements"
+        return await chat_booking(chat, current_user)
+
+    if state["step"] == "asking_time":
+        if "appointment_time" not in current_data:
+            return {"response": "Please provide a valid time (HH:MM).", "requires_action": False}
+        state["step"] = "check_requirements"
+        return await chat_booking(chat, current_user)
+
+    if state["step"] == "asking_urgency":
+        if "urgency" not in current_data:
+            return {"response": "Please specify if this is 'Normal' or 'Urgent'.", "requires_action": False}
+        state["step"] = "check_requirements"
+        return await chat_booking(chat, current_user)
+
+    if state["step"] == "asking_reason":
+        # Reason is special, we take the WHOLE message if keywords failed
+        if "reason" not in current_data:
+            chat_states[user_id]["data"]["reason"] = message
+        state["step"] = "saving"
+        # continue to saving...
 
     # ==================================================
-    # asking time
+    # SAVING TO DATABASE
     # ==================================================
-    elif step == "asking_time":
-        match = re.search(r'\d{1,2}:\d{2}', message)
-        if match:
-            time_val = match.group(0)
-            if len(time_val) == 4:
-                time_val = "0" + time_val
-            formatted_time = time_val + ":00"
-            
-            chat_states[user_id]["data"]["appointment_time"] = formatted_time
-            chat_states[user_id]["step"] = "asking_urgency"
-            response_text = "Time recorded. 🕒 \n\nIs this 'Normal' or 'Urgent'?"
-        else:
-            response_text = "Please enter a valid time in HH:MM format (24-hour clock, e.g., 14:00)."
-
-    # ==================================================
-    # asking urgency
-    # ==================================================
-    elif step == "asking_urgency":
-        valid_urgencies = ["normal", "urgent"]
-        found = next((u for u in valid_urgencies if u in message), None)
+    if state["step"] == "saving":
+        data = state["data"]
         
-        if found:
-            db_urgency = "Urgent" if found == "urgent" else "Normal"
-            
-            chat_states[user_id]["data"]["urgency"] = db_urgency
-            chat_states[user_id]["step"] = "asking_reason"
-            response_text = "Understood. 📝 \n\nFinally, please briefly describe the reason for your visit."
-        else:
-            response_text = "Please choose a valid urgency: 'Normal' or 'Urgent'."
-
-    # ==================================================
-    # asking reason then save to DB
-    # ==================================================
-    elif step == "asking_reason":
-        chat_states[user_id]["data"]["reason"] = chat.message 
-        
-        data = chat_states[user_id]["data"]
-        conn = get_db()
-        cursor = conn.cursor()
         try:
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            # Save
             cursor.execute("""
                 INSERT INTO appointments (student_id, appointment_date, appointment_time, service_type, urgency, reason, booking_mode, status)
                 VALUES (%s, %s, %s, %s, %s, %s, 'ai_chatbot', 'pending')
@@ -503,23 +544,26 @@ async def chat_booking(chat: ChatMessage, current_user = Depends(get_current_use
             ))
             conn.commit()
             
-            # happy responses
-            response_text = (
-                "🎉 Hooray! Your appointment has been successfully booked! \n\n"
-                "I've saved it to your dashboard. We look forward to seeing you! 💙 \n\n"
-                "Is there anything else I can help you with?"
+            final_response = (
+                f"🎉 **Success!** I have booked your {data['service_type']}.\n\n"
+                f"📅 **Date:** {data['appointment_date']}\n"
+                f"🕒 **Time:** {data['appointment_time']}\n"
+                f"📝 **Reason:** {data['reason']}\n\n"
+                "See you soon! Stay healthy! 💙"
             )
             
-        except Error as e:
-            response_text = f"❌ Oh no! There was an error saving your appointment: {str(e)}. Please try again later."
-        finally:
-            cursor.close()
-            conn.close()
-            
-        # reset state to idle so they can say "Thanks" or book again
-        chat_states[user_id] = {"step": "idle", "data": {}}
+            # Reset
+            chat_states[user_id] = {"step": "idle", "data": {}}
+            return {"response": final_response, "requires_action": False}
 
-    return {"response": response_text, "requires_action": False}
+        except Exception as e:
+            print(f"DB Error: {e}")
+            return {"response": "I had trouble saving to the database. Please try again later.", "requires_action": False}
+        finally:
+            if 'cursor' in locals(): cursor.close()
+            if 'conn' in locals(): conn.close()
+
+    return {"response": "I'm confused. Say 'reset' to start over.", "requires_action": False}
 
 if __name__ == "__main__":
     import uvicorn

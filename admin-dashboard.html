@@ -6,39 +6,6 @@
     <title>Admin Dashboard</title>
     <link rel="stylesheet" href="style.css"> 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <style>
-        .status-pill.approved { background-color: #e8f5e9; color: #2e7d32; }
-        .status-pill.rejected { background-color: #ffebee; color: #c62828; }
-        .status-pill.pending { background-color: #fff3e0; color: #f57c00; }
-        .status-pill.canceled { background-color: #f5f5f5; color: #757575; }
-
-        .urgency-badge { font-weight: bold; font-size: 0.85rem; }
-        .urgency-urgent { color: #d32f2f; }
-        .urgency-normal { color: #388e3c; }
-
-        .modal-input {
-            width: 100%;
-            padding: 12px;
-            margin-top: 5px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            box-sizing: border-box;
-            font-size: 1rem;
-        }
-
-        .btn-delete {
-            background-color: #ffebee;
-            color: #c62828;
-            border: 1px solid #ef9a9a;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        .btn-delete:hover { background-color: #ffcdd2; }
-    </style>
 </head>
 <body>
 
@@ -75,24 +42,29 @@
                 <div class="card">
                     <div class="section-header">
                         <h2>Appointment Requests</h2>
-                        <div class="filter-bar">
-                            <select id="sort-order" onchange="applyFiltersAndSort()" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd; margin-right: 10px; max-width: 250px;">
-                                <option value="default">Default (All / Newest First)</option>
+                        
+                        <div class="filter-bar" style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <select id="sort-order" onchange="applyFiltersAndSort()" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
+                                <option value="default">Default (Newest First)</option>
                                 <option value="clearance-urgent">Medical Clearance (Urgent)</option>
                                 <option value="consultation-urgent">Medical Consultation (Urgent)</option>
-                                <option value="clearance-normal">Medical Clearance (Normal Only)</option>
-                                <option value="consultation-normal">Medical Consultation (Normal Only)</option>
+                                <option value="clearance-normal">Medical Clearance (Normal)</option>
+                                <option value="consultation-normal">Medical Consultation (Normal)</option>
                             </select>
 
-                            <input type="text" id="search-input" onkeyup="applyFiltersAndSort()" placeholder="Search student name..." style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+                            <input type="text" id="search-input" onkeyup="applyFiltersAndSort()" placeholder="Search student name..." style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
                             
-                            <select id="status-filter" onchange="applyFiltersAndSort()" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd; margin-left: 10px;">
+                            <select id="status-filter" onchange="applyFiltersAndSort()" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
                                 <option value="all">All Status</option>
                                 <option value="pending">Pending</option>
                                 <option value="approved">Approved</option>
                                 <option value="rejected">Rejected</option>
                                 <option value="canceled">Canceled</option>
                             </select>
+                            
+                            <button onclick="loadAppointments()" class="btn-refresh" title="Refresh List">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
                         </div>
                     </div>
 
@@ -102,7 +74,9 @@
                                 <tr>
                                     <th>Date</th>
                                     <th>Student</th>
-                                    <th>Service</th> <th>Urgency</th> <th>Status</th>
+                                    <th>Service</th> 
+                                    <th>Urgency</th> 
+                                    <th>Status</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -115,11 +89,21 @@
             <div id="users-tab" class="tab-content">
                 <div class="card">
                     <div class="section-header">
-                        <h2>Admin Users</h2>
-                        <button onclick="showAddUserModal()" class="btn-primary">
-                            <i class="fas fa-plus"></i> Add New Admin
-                        </button>
+                        <h2>Manage Users</h2>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <select id="user-role-filter" onchange="loadUsers()" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
+                                <option value="all">Show All</option>
+                                <option value="admin">Admins Only</option>
+                                <option value="student">Students Only</option>
+                            </select>
+
+                            <button onclick="showAddUserModal()" class="btn-primary">
+                                <i class="fas fa-plus"></i> Add New Admin
+                            </button>
+                        </div>
                     </div>
+                    
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
@@ -146,13 +130,15 @@
                 <span class="close" onclick="closeModal('appointment-modal')">&times;</span>
             </div>
             <div id="appointment-details" class="modal-body"></div>
+            
             <div class="modal-actions" style="display: flex; gap: 10px; margin-top: 20px;">
-                <button onclick="updateAppointmentStatus('approved')" class="btn-primary" style="flex:1;">Approve</button>
+                <button onclick="updateAppointmentStatus('approved')" class="btn-primary" style="flex:1; background-color: var(--success);">Approve</button>
                 <button onclick="showRejectForm()" class="btn-logout" style="flex:1;">Reject</button>
             </div>
+            
             <div id="reject-form" class="reject-box" style="display:none; margin-top: 15px;">
-                <textarea id="admin-note" class="modal-input" placeholder="Enter reason for rejection..." rows="3"></textarea>
-                <button onclick="updateAppointmentStatus('rejected')" class="btn-logout" style="width:100%; margin-top:5px; background: #ffebee;">Confirm Rejection</button>
+                <textarea id="admin-note" class="modal-input" placeholder="Enter reason for rejection..." rows="3" style="width:100%; margin-bottom:10px;"></textarea>
+                <button onclick="updateAppointmentStatus('rejected')" class="btn-logout" style="width:100%; background: #ffebee;">Confirm Rejection</button>
             </div>
         </div>
     </div>
@@ -166,24 +152,24 @@
             <form id="add-user-form" class="modal-body" onsubmit="handleNewUser(event)">
                 <div class="input-group">
                     <label>Full Name</label>
-                    <input type="text" id="new-full-name" class="modal-input" required>
+                    <input type="text" id="new-full-name" required>
                 </div>
                 <div class="input-group">
                     <label>Email</label>
-                    <input type="email" id="new-email" class="modal-input" required>
+                    <input type="email" id="new-email" required>
                 </div>
                 <div class="input-group">
                     <label>Role</label>
-                    <select id="new-role" class="modal-input" required>
+                    <select id="new-role" required>
                         <option value="admin">Admin</option>
                         <option value="super_admin">Super Admin</option>
                     </select>
                 </div>
                 <div class="input-group">
                     <label>Password</label>
-                    <input type="password" id="new-password" class="modal-input" required minlength="6">
+                    <input type="password" id="new-password" required minlength="6">
                 </div>
-                <button type="submit" class="btn-primary btn-full" style="width:100%">Create User</button>
+                <button type="submit" class="btn-primary btn-full">Create User</button>
             </form>
         </div>
     </div>

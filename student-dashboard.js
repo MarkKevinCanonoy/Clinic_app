@@ -55,7 +55,7 @@ async function handleBooking(e) {
         return;
     }
 
-    const time = timeRaw + ":00"; 
+    const time = timeRaw.length === 5 ? timeRaw + ":00" : timeRaw;
 
     try {
         // try sending to API
@@ -84,13 +84,11 @@ async function handleBooking(e) {
 
         alert("Appointment booked successfully!");
         form.reset();
-        
-        // refresh the appointments list
         await loadAppointments();
         
-            // switch to appointments tab
-        const tabs = document.querySelectorAll('.tab-btn');
-        if(tabs[2]) tabs[2].click(); 
+        // optional: switch to appointments tab
+        // const tabs = document.querySelectorAll('.tab-btn');
+        // if(tabs[2]) tabs[2].click(); 
 
     } catch (error) {
         console.error('Booking error:', error);
@@ -100,6 +98,9 @@ async function handleBooking(e) {
 
 // load appointments
 async function loadAppointments() {
+    const container = document.getElementById('appointments-list');
+    container.innerHTML = '<p>Loading...</p>';
+
     try {
         const response = await fetch(`${API_URL}/appointments`, {
             headers: {
@@ -112,7 +113,7 @@ async function loadAppointments() {
         
     } catch (error) {
         console.error('Error loading appointments:', error);
-        document.getElementById('appointments-list').innerHTML = '<p>Error loading appointments</p>';
+        container.innerHTML = '<p>Error loading appointments</p>';
     }
 }
 
@@ -125,45 +126,64 @@ function displayAppointments(appointments) {
     }
     
     container.innerHTML = appointments.map(apt => {
-        // logic: if status is pending, show Cancel. if finished/rejected/canceled, show Delete.
+        // format date nice
+        const niceDate = new Date(apt.appointment_date).toDateString();
+        
+        // Capitalize status
+        const statusLabel = apt.status.charAt(0).toUpperCase() + apt.status.slice(1);
+
+        // --- NEW: Admin Note Box Logic ---
+        let adminNoteHtml = '';
+        if (apt.status === 'rejected' && apt.admin_note) {
+            adminNoteHtml = `
+                <div class="admin-note-box">
+                    <i class="fas fa-exclamation-circle"></i> 
+                    <strong>Reason for Rejection:</strong><br> 
+                    ${apt.admin_note}
+                </div>
+            `;
+        }
+
+        // Logic: if status is pending, show Cancel. if finished/rejected/canceled, show Delete.
         let actionButton = '';
         
         if (apt.status === 'pending') {
             actionButton = `<button onclick="cancelAppointment(${apt.id})" class="btn-cancel">Cancel Request</button>`;
         } else {
-            actionButton = `<button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828; border: 1px solid #ef9a9a;">Delete Appointment</button>`;
+            // Updated style to match new CSS
+            actionButton = `<button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828;">Delete History</button>`;
         }
 
         return `
         <div class="appointment-card status-${apt.status}">
             <div class="apt-header">
-                <span class="apt-date">${formatDate(apt.appointment_date)}</span>
-                <span class="apt-time">${formatTime(apt.appointment_time)}</span>
+                <span class="apt-date">${niceDate}</span>
+                <span class="status-pill ${apt.status}">${statusLabel}</span>
             </div>
             <div class="apt-body">
+                <p><strong>Time:</strong> ${apt.appointment_time}</p>
                 <p><strong>Service:</strong> ${apt.service_type || 'General'}</p>
                 <p><strong>Urgency:</strong> ${apt.urgency || 'Low'}</p>
                 <p><strong>Reason:</strong> ${apt.reason}</p>
-                <p><strong>Status:</strong> <span class="status-badge">${apt.status.toUpperCase()}</span></p>
-                <p><strong>Booking Mode:</strong> ${apt.booking_mode === 'ai_chatbot' ? 'AI Chatbot' : 'Standard'}</p>
-                ${apt.admin_note ? `<p><strong>Note:</strong> ${apt.admin_note}</p>` : ''}
+                <p><strong>Mode:</strong> ${apt.booking_mode === 'ai_chatbot' ? 'AI Chatbot' : 'Standard'}</p>
+                
+                ${adminNoteHtml}
             </div>
             <div class="apt-actions">
                 ${actionButton}
             </div>
         </div>
-    `}).join('');
+        `;
+    }).join('');
 }
 
 async function deleteHistory(id) {
-    if (!confirm('Remove this appointment?')) return;
-    
+    if (!confirm('Remove this appointment from history?')) return;
     try {
         const response = await fetch(`${API_URL}/appointments/${id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
         if (response.ok) {
             alert('Appointment removed.');
             loadAppointments();
@@ -185,13 +205,17 @@ async function cancelAppointment(id) {
         if (response.ok) {
             alert('Appointment canceled successfully');
             loadAppointments();
-        } 
-    } catch (error) { console.error(error); }
+        } else {
+            alert('Failed to cancel appointment');
+        }
+    } catch (error) { 
+        console.error(error);
+        alert('Failed to cancel appointment');
+    }
 }
 
 function filterAppointments() {
     const filter = document.getElementById('status-filter').value;
-    
     if (filter === 'all') {
         displayAppointments(allAppointments);
     } else {
@@ -200,34 +224,10 @@ function filterAppointments() {
     }
 }
 
-async function cancelAppointment(id) {
-    if (!confirm('Are you sure you want to cancel this appointment?')) return;
-    
-    try {
-        const response = await fetch(`${API_URL}/appointments/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        if (response.ok) {
-            alert('Appointment canceled successfully');
-            loadAppointments();
-        } else {
-            alert('Failed to cancel appointment');
-        }
-        
-    } catch (error) {
-        console.error('Error canceling appointment:', error);
-        alert('Failed to cancel appointment');
-    }
-}
-
 function initChatbot() {
     const chatMessages = document.getElementById('chat-messages');
     if (chatMessages && chatMessages.children.length === 0) {
-        addChatMessage('bot', 'Hello! I\'m here to help you book an appointment. Please tell me when you\'d like to visit the clinic and what\'s the reason for your visit.');
+        addChatMessage('bot', "Hello! I'm here to help you book an appointment. Please tell me when you'd like to visit the clinic and what's the reason for your visit.");
     }
 }
 
@@ -242,6 +242,7 @@ function addChatMessage(sender, message) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// Logic AI chat function (Kept logic-based, but fixed HTML classes)
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const message = input.value.trim();
@@ -252,18 +253,24 @@ async function sendChatMessage() {
     input.value = '';
     
     try {
+        // Logic AI does NOT send history, so we keep this simple
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ message })
+            body: JSON.stringify({ message }) 
         });
         
         const data = await response.json();
         addChatMessage('bot', data.response);
         
+        // If the Logic AI booked something, we refresh the list
+        if (data.response.includes("booked") || data.response.includes("confirmed")) {
+            loadAppointments();
+        }
+
     } catch (error) {
         console.error('Chat error:', error);
         addChatMessage('bot', 'Sorry, I encountered an error. Please try again.');
@@ -279,17 +286,9 @@ if(chatInput) {
     });
 }
 
-function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-function formatTime(timeStr) {
-    const [hours, minutes] = timeStr.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
+// Helper: Handle Enter key in input
+function handleEnter(e) {
+    if (e.key === 'Enter') sendChatMessage();
 }
 
 loadAppointments();
