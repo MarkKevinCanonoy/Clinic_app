@@ -30,6 +30,7 @@ function showTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(tabName + '-tab').style.display = 'block';
     event.currentTarget.classList.add('active');
+    
     if (tabName === 'appointments') loadAppointments();
     if (tabName === 'users') loadUsers();
 }
@@ -56,7 +57,7 @@ async function loadAppointments() {
     }
 }
 
-// filter
+// filter logic
 function applyFiltersAndSort() {
     const statusFilter = document.getElementById('status-filter').value;
     const searchTerm = document.getElementById('search-input').value.toLowerCase();
@@ -87,13 +88,13 @@ function applyFiltersAndSort() {
         return matchesStatus && matchesSearch && matchesType;
     });
 
+    // sort newest first
     filtered.sort((a, b) => new Date(b.appointment_date) - new Date(a.appointment_date));
 
     displayAppointments(filtered);
 }
 
 // display appointments
-
 function displayAppointments(data) {
     const tbody = document.getElementById('appointments-list');
     tbody.innerHTML = '';
@@ -107,8 +108,8 @@ function displayAppointments(data) {
         const urgency = apt.urgency || 'Low';
         const urgencyClass = (urgency.toLowerCase() === 'urgent' || urgency.toLowerCase() === 'high') ? 'urgency-urgent' : 'urgency-normal';
 
-        // admin can only delete non-pending appointments
-        const showDelete = apt.status !== 'pending';
+        // FIX: Admin can delete ANY appointment now (Removed the pending check)
+        const showDelete = true; 
 
         const row = `
             <tr>
@@ -177,6 +178,7 @@ function openAppointmentModal(id) {
 }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function showRejectForm() { document.getElementById('reject-form').style.display = 'block'; }
+
 async function updateAppointmentStatus(status) {
     const note = document.getElementById('admin-note').value;
     await fetch(`${API_URL}/appointments/${currentAppointmentId}`, {
@@ -188,30 +190,85 @@ async function updateAppointmentStatus(status) {
     loadAppointments();
 }
 
+// User Management (Now shows students too)
+// [UPDATED] User Management with Sorting
 async function loadUsers() {
     try {
         const response = await fetch(`${API_URL}/users`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const users = await response.json();
+        let users = await response.json();
+        
+        // 1. Get the filter value
+        const filter = document.getElementById('user-role-filter').value;
+
+        // 2. Filter the list based on selection
+        if (filter === 'student') {
+            users = users.filter(u => u.role === 'student');
+        } else if (filter === 'admin') {
+            // "Admins" usually means both normal Admin and Super Admin
+            users = users.filter(u => u.role === 'admin' || u.role === 'super_admin');
+        }
+        // If 'all', we do nothing (show everyone)
+
+        // 3. Display the results
         const tbody = document.getElementById('users-list');
         tbody.innerHTML = '';
+        
+        if (users.length === 0) {
+             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No users found for this category.</td></tr>`;
+             return;
+        }
+
         users.forEach(u => {
+            // Colors for easy reading
+            let roleColor = '#333';
+            let roleLabel = 'Student';
+
+            if (u.role === 'student') {
+                roleColor = 'green';
+                roleLabel = 'Student';
+            } else if (u.role === 'super_admin') {
+                roleColor = 'purple';
+                roleLabel = 'Super Admin';
+            } else {
+                roleColor = 'blue';
+                roleLabel = 'Admin';
+            }
+
             tbody.insertAdjacentHTML('beforeend', `
                 <tr>
                     <td>${u.full_name}</td>
                     <td>${u.email}</td>
-                    <td>${u.role}</td>
+                    <td><span style="color: ${roleColor}; font-weight:bold;">${roleLabel}</span></td>
                     <td>${new Date(u.created_at).toLocaleDateString()}</td>
-                    <td><button onclick="deleteUser(${u.id})" class="btn-delete"><i class="fas fa-trash"></i></button></td>
+                    <td>
+                        <button onclick="deleteUser(${u.id})" class="btn-delete" title="Delete User">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
                 </tr>
             `);
         });
     } catch (e) { console.error(e); }
 }
-
 async function deleteUser(id) {
-    if(!confirm("Delete this user?")) return;
-    await fetch(`${API_URL}/users/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-    loadUsers();
+    if(!confirm("Delete this user? This will also delete their appointment history.")) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/users/${id}`, { 
+            method: 'DELETE', 
+            headers: { 'Authorization': `Bearer ${token}` } 
+        });
+        
+        if (response.ok) {
+            alert("User deleted.");
+            loadUsers();
+        } else {
+            const data = await response.json();
+            alert(data.detail || "Failed to delete user.");
+        }
+    } catch(e) {
+        alert("Error connecting to server.");
+    }
 }
 
 function showAddUserModal() { document.getElementById('add-user-modal').style.display = 'flex'; }

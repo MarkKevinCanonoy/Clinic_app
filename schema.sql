@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS school_clinic;
 USE school_clinic;
 
--- users table (students, admins, super_admins)
+-- 1. users table
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     full_name VARCHAR(255) NOT NULL,
@@ -12,14 +12,23 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- appointments table
+-- 2. appointments table
 CREATE TABLE appointments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     student_id INT NOT NULL,
     appointment_date DATE NOT NULL,
     appointment_time TIME NOT NULL,
+    
+    -- Specific Enums used in your Dropdowns
+    service_type ENUM('Medical Consultation', 'Medical Clearance') DEFAULT 'Medical Consultation',
+    urgency ENUM('Normal', 'Urgent') DEFAULT 'Normal',
+
     reason TEXT NOT NULL,
+    
+    -- *** CRITICAL FIX HERE ***
+    -- Changed 'ai_chat' to 'ai_chatbot' to match your Python code
     booking_mode ENUM('standard', 'ai_chatbot') DEFAULT 'standard',
+    
     status ENUM('pending', 'approved', 'rejected', 'canceled') DEFAULT 'pending',
     admin_note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -27,7 +36,7 @@ CREATE TABLE appointments (
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- chat history table (for AI chatbot conversations)
+-- 3. chat history table (Optional, for future use)
 CREATE TABLE chat_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     student_id INT NOT NULL,
@@ -38,4 +47,3 @@ CREATE TABLE chat_history (
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL
 );
-

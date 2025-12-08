@@ -38,12 +38,11 @@
                     <i class="fas fa-list"></i> My Appointments
                 </button>
             </div>
-<div id="booking-tab" class="tab-content active">
+
+            <div id="booking-tab" class="tab-content active">
                 <div class="booking-card-wrapper">
                     <div class="booking-header-banner">
-                        <div class="banner-icon">
-                            <i class="fas fa-notes-medical"></i>
-                        </div>
+                        <div class="banner-icon"><i class="fas fa-notes-medical"></i></div>
                         <div class="banner-text">
                             <h2>Book Appointment</h2>
                             <p>Schedule a visit with the school clinic.</p>
@@ -51,7 +50,6 @@
                     </div>
                     
                     <form id="booking-form" onsubmit="handleBooking(event)" class="booking-form-body">
-                        
                         <div class="form-row">
                             <div class="input-group">
                                 <label><i class="fas fa-stethoscope"></i> Service Type</label>
@@ -83,7 +81,7 @@
 
                         <div class="input-group">
                             <label><i class="fas fa-comment-medical"></i> Reason for Visit</label>
-                            <textarea id="book-reason" rows="3" placeholder="Please describe your symptoms or concern..." required></textarea>
+                            <textarea id="book-reason" rows="3" placeholder="Describe your symptoms..." required></textarea>
                         </div>
 
                         <div class="form-actions">
@@ -102,12 +100,10 @@
                         <span style="font-size: 0.8rem;">● Online</span>
                     </div>
                     <div class="chat-container">
-                        <div id="chat-messages" class="chat-messages">
-                            <div class="chat-message bot">Hello! I am the Clinic AI. How can I help you today?</div>
-                        </div>
+                        <div id="chat-messages" class="chat-messages"></div>
                         <div class="chat-input-container">
-                            <input type="text" id="chat-input" placeholder="Type your message..." onkeypress="handleEnter(event)">
-                            <button onclick="sendMessage()" class="btn-send">
+                            <input type="text" id="chat-input" placeholder="Type here (e.g., 'Book me for Friday')..." >
+                            <button onclick="sendChatMessage()" class="btn-send">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
@@ -118,49 +114,15 @@
             <div id="appointments-tab" class="tab-content">
                 <div class="section-header">
                     <h2>My Appointments</h2>
-                    <div>
-                        <select id="status-filter" onchange="filterAppointments()" style="padding: 8px; border-radius:5px; border:1px solid #ddd;">
-                            <option value="all">All Status</option>
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
-                            <option value="canceled">Canceled</option>
-                        </select>
-                    </div>
+                    <button onclick="loadAppointments()" class="btn-refresh">
+                        <i class="fas fa-sync-alt"></i> Refresh List
+                    </button>
                 </div>
-                
-                <div id="appointments-list" class="appointments-grid">
-                    <div class="appointment-card status-pending" data-status="pending">
-                        <div class="apt-header">
-                            <span class="apt-date">Oct 24, 2025</span>
-                            <span class="status-pill pending">Pending</span>
-                        </div>
-                        <div class="apt-body">
-                            <p><strong>Time:</strong> 10:00 AM</p>
-                            <p><strong>Reason:</strong> Consultation regarding medical clearance.</p>
-                        </div>
-                        <button class="btn-cancel" onclick="cancelAppointment(this)">Cancel Request</button>
-                    </div>
-                    
-                    <div class="appointment-card status-approved" data-status="approved">
-                        <div class="apt-header">
-                            <span class="apt-date">Oct 20, 2025</span>
-                            <span class="status-pill approved" style="background:#e8f5e9; color:#2e7d32;">Approved</span>
-                        </div>
-                        <div class="apt-body">
-                            <p><strong>Time:</strong> 01:00 PM</p>
-                            <p><strong>Reason:</strong> Dental Checkup.</p>
-                        </div>
-                    </div>
-                </div>
+                <div id="appointments-list" class="appointments-grid"></div>
             </div>
 
         </main>
     </div>
-
-    <footer class="footer">
-        <p>© 2025 Eastern Visayas State University - Ormoc Campus</p>
-    </footer>
 
     <script src="student-dashboard.js"></script>
 </body>

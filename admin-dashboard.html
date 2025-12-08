@@ -112,30 +112,39 @@
                 </div>
             </div>
 
-            <div id="users-tab" class="tab-content">
-                <div class="card">
-                    <div class="section-header">
-                        <h2>Admin Users</h2>
-                        <button onclick="showAddUserModal()" class="btn-primary">
-                            <i class="fas fa-plus"></i> Add New Admin
-                        </button>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Created At</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-list"></tbody>
-                        </table>
-                    </div>
-                </div>
+<div id="users-tab" class="tab-content">
+    <div class="card">
+        <div class="section-header">
+            <h2>Manage Users</h2>
+            
+            <div style="display: flex; gap: 10px;">
+                <select id="user-role-filter" onchange="loadUsers()" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+                    <option value="all">Show All</option>
+                    <option value="admin">Admins Only</option>
+                    <option value="student">Students Only</option>
+                </select>
+
+                <button onclick="showAddUserModal()" class="btn-primary">
+                    <i class="fas fa-plus"></i> Add New Admin
+                </button>
             </div>
+            </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Created At</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="users-list"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
         </main>
     </div>
 
