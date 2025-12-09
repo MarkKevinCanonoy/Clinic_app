@@ -33,10 +33,23 @@ function showTab(tabName) {
 }
 
 function logout() {
-    localStorage.clear();
-    window.location.href = 'index.html';
+    Swal.fire({
+        title: 'Sign out?',
+        text: "You will need to login again.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#e74c3c',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, logout'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+    });
 }
 
+// manual booking logic
 async function handleBooking(e) {
     e.preventDefault(); 
     
@@ -49,16 +62,15 @@ async function handleBooking(e) {
     const urgency = document.getElementById('book-urgency').value;
     const reason = document.getElementById('book-reason').value;
 
-    // validate
+    // validation
     if(!serviceType || !date || !timeRaw || !reason || !urgency) {
-        alert("Please fill in all required fields.");
+        Swal.fire('Missing Details', 'Please fill in all required fields.', 'warning');
         return;
     }
 
     const time = timeRaw.length === 5 ? timeRaw + ":00" : timeRaw;
 
     try {
-        // try sending to API
         const response = await fetch(`${API_URL}/appointments`, {
             method: 'POST',
             headers: {
@@ -78,21 +90,23 @@ async function handleBooking(e) {
         const data = await response.json();
 
         if (!response.ok) {
-            alert(data.detail || 'Booking failed');
+            Swal.fire('Booking Failed', data.detail || 'Could not book appointment.', 'error');
             return;
         }
 
-        alert("Appointment booked successfully!");
+        Swal.fire({
+            icon: 'success',
+            title: 'Booked!',
+            text: 'Your appointment has been scheduled.',
+            confirmButtonColor: '#1E88E5'
+        });
+
         form.reset();
         await loadAppointments();
-        
-        // optional: switch to appointments tab
-        // const tabs = document.querySelectorAll('.tab-btn');
-        // if(tabs[2]) tabs[2].click(); 
 
     } catch (error) {
         console.error('Booking error:', error);
-        alert('Connection error. Please try again.');
+        Swal.fire('Error', 'Connection error. Please try again.', 'error');
     }
 }
 
@@ -129,10 +143,10 @@ function displayAppointments(appointments) {
         // format date nice
         const niceDate = new Date(apt.appointment_date).toDateString();
         
-        // Capitalize status
+        // capitalize status
         const statusLabel = apt.status.charAt(0).toUpperCase() + apt.status.slice(1);
 
-        // --- NEW: Admin Note Box Logic ---
+        // admin note logic
         let adminNoteHtml = '';
         if (apt.status === 'rejected' && apt.admin_note) {
             adminNoteHtml = `
@@ -144,13 +158,12 @@ function displayAppointments(appointments) {
             `;
         }
 
-        // Logic: if status is pending, show Cancel. if finished/rejected/canceled, show Delete.
+        // button logic
         let actionButton = '';
         
         if (apt.status === 'pending') {
             actionButton = `<button onclick="cancelAppointment(${apt.id})" class="btn-cancel">Cancel Request</button>`;
         } else {
-            // Updated style to match new CSS
             actionButton = `<button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828;">Delete History</button>`;
         }
 
@@ -178,39 +191,53 @@ function displayAppointments(appointments) {
 }
 
 async function deleteHistory(id) {
-    if (!confirm('Remove this appointment from history?')) return;
-    try {
-        const response = await fetch(`${API_URL}/appointments/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-            alert('Appointment removed.');
-            loadAppointments();
-        } else {
-            alert('Failed to remove.');
+    Swal.fire({
+        title: 'Remove from history?',
+        text: "This action cannot be undone.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await deleteOrCancel(id, 'Appointment removed.');
         }
-    } catch (error) {
-        console.error(error);
-    }
+    });
 }
 
 async function cancelAppointment(id) {
-    if (!confirm('Are you sure you want to cancel this appointment?')) return;
+    Swal.fire({
+        title: 'Cancel Request?',
+        text: "Are you sure you want to cancel?",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, cancel it'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await deleteOrCancel(id, 'Appointment canceled successfully.');
+        }
+    });
+}
+
+async function deleteOrCancel(id, successMsg) {
     try {
         const response = await fetch(`${API_URL}/appointments/${id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
         if (response.ok) {
-            alert('Appointment canceled successfully');
+            Swal.fire('Done!', successMsg, 'success');
             loadAppointments();
         } else {
-            alert('Failed to cancel appointment');
+            Swal.fire('Error', 'Failed to update.', 'error');
         }
-    } catch (error) { 
+    } catch (error) {
         console.error(error);
-        alert('Failed to cancel appointment');
+        Swal.fire('Error', 'Connection failed.', 'error');
     }
 }
 
@@ -224,6 +251,7 @@ function filterAppointments() {
     }
 }
 
+// chatbot logic
 function initChatbot() {
     const chatMessages = document.getElementById('chat-messages');
     if (chatMessages && chatMessages.children.length === 0) {
@@ -242,7 +270,7 @@ function addChatMessage(sender, message) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Logic AI chat function (Kept logic-based, but fixed HTML classes)
+// logic ai chat function
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const message = input.value.trim();
@@ -253,7 +281,6 @@ async function sendChatMessage() {
     input.value = '';
     
     try {
-        // Logic AI does NOT send history, so we keep this simple
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
@@ -266,7 +293,7 @@ async function sendChatMessage() {
         const data = await response.json();
         addChatMessage('bot', data.response);
         
-        // If the Logic AI booked something, we refresh the list
+        // logic ai refresh trigger
         if (data.response.includes("booked") || data.response.includes("confirmed")) {
             loadAppointments();
         }
@@ -286,7 +313,6 @@ if(chatInput) {
     });
 }
 
-// Helper: Handle Enter key in input
 function handleEnter(e) {
     if (e.key === 'Enter') sendChatMessage();
 }

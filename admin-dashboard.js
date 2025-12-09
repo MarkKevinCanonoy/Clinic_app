@@ -8,8 +8,16 @@ const role = localStorage.getItem('role');
 const fullName = localStorage.getItem('full_name') || 'Admin';
 
 if (!token || (role !== 'admin' && role !== 'super_admin')) {
-    alert("Unauthorized access. Redirecting to login.");
-    window.location.href = 'index.html';
+    // using sweetalert for cleaner redirect
+    Swal.fire({
+        icon: 'error',
+        title: 'Unauthorized',
+        text: 'Redirecting to login...',
+        timer: 1500,
+        showConfirmButton: false
+    }).then(() => {
+        window.location.href = 'index.html';
+    });
 }
 
 document.getElementById('user-name').textContent = fullName;
@@ -36,13 +44,23 @@ function showTab(tabName) {
 }
 
 function logout() {
-    if(confirm("Logout?")) {
-        localStorage.clear();
-        window.location.href = 'index.html';
-    }
+    Swal.fire({
+        title: 'Sign out?',
+        text: "You will return to the login screen.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#e74c3c',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, logout'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+    });
 }
 
-// --- Appointment Logic ---
+// --- appointment logic ---
 
 async function loadAppointments() {
     try {
@@ -101,10 +119,10 @@ function displayAppointments(data) {
         const urgency = apt.urgency || 'Low';
         const urgencyClass = (urgency.toLowerCase() === 'urgent' || urgency.toLowerCase() === 'high') ? 'color: var(--danger); font-weight:bold;' : 'color: var(--success);';
         
-        // Capitalize status
+        // capitalize status
         const statusLabel = apt.status.charAt(0).toUpperCase() + apt.status.slice(1);
 
-        // Admins can delete ANY appointment now
+        // admins can delete any appointment now
         const showDelete = true; 
 
         const row = `
@@ -131,19 +149,30 @@ function displayAppointments(data) {
 }
 
 async function deleteAppointment(id) {
-    if(!confirm("Are you sure you want to permanently delete this record?")) return;
-    try {
-        const response = await fetch(`${API_URL}/appointments/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if(response.ok) {
-            alert("Record deleted.");
-            loadAppointments();
-        } else {
-            alert("Failed to delete.");
+    Swal.fire({
+        title: 'Delete Record?',
+        text: "This action cannot be undone.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                const response = await fetch(`${API_URL}/appointments/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if(response.ok) {
+                    Swal.fire('Deleted!', 'Record has been removed.', 'success');
+                    loadAppointments();
+                } else {
+                    Swal.fire('Error', 'Failed to delete record.', 'error');
+                }
+            } catch(e) { console.error(e); }
         }
-    } catch(e) { console.error(e); }
+    });
 }
 
 function formatDate(d) {
@@ -176,24 +205,38 @@ function showRejectForm() { document.getElementById('reject-form').style.display
 
 async function updateAppointmentStatus(status) {
     const note = document.getElementById('admin-note').value;
+    
     await fetch(`${API_URL}/appointments/${currentAppointmentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: status, admin_note: note })
     });
+    
     closeModal('appointment-modal');
+    
+    // success toast
+    Swal.fire({
+        icon: 'success',
+        title: 'Updated!',
+        text: `Appointment marked as ${status}.`,
+        timer: 1500,
+        showConfirmButton: false
+    });
+    
     loadAppointments();
 }
 
-// --- User Management Logic (Updated for Filters) ---
+// --- user management logic ---
 
 async function loadUsers() {
     try {
         const response = await fetch(`${API_URL}/users`, { headers: { 'Authorization': `Bearer ${token}` } });
         let users = await response.json();
         
-        // 1. Filter Logic
-        const filter = document.getElementById('user-role-filter').value;
+        // filter logic
+        const filterElement = document.getElementById('user-role-filter');
+        const filter = filterElement ? filterElement.value : 'all';
+
         if (filter === 'student') {
             users = users.filter(u => u.role === 'student');
         } else if (filter === 'admin') {
@@ -209,7 +252,7 @@ async function loadUsers() {
         }
 
         users.forEach(u => {
-            // Colors
+            // colors
             let roleColor = '#333';
             let roleLabel = 'Student';
 
@@ -238,9 +281,34 @@ async function loadUsers() {
 }
 
 async function deleteUser(id) {
-    if(!confirm("Delete this user?")) return;
-    await fetch(`${API_URL}/users/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-    loadUsers();
+    Swal.fire({
+        title: 'Delete User?',
+        text: "This will also delete their appointments.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete user'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                const response = await fetch(`${API_URL}/users/${id}`, { 
+                    method: 'DELETE', 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                
+                if (response.ok) {
+                    Swal.fire('Deleted!', 'User has been removed.', 'success');
+                    loadUsers();
+                } else {
+                    const data = await response.json();
+                    Swal.fire('Error', data.detail || "Failed to delete user.", 'error');
+                }
+            } catch(e) {
+                Swal.fire('Error', "Server connection error.", 'error');
+            }
+        }
+    });
 }
 
 function showAddUserModal() { document.getElementById('add-user-modal').style.display = 'flex'; }
@@ -258,6 +326,11 @@ async function handleNewUser(e) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(body)
     });
-    if(res.ok) { alert("User Created"); closeModal('add-user-modal'); loadUsers(); }
-    else { alert("Failed"); }
+    if(res.ok) { 
+        Swal.fire('Success', 'User created successfully.', 'success');
+        closeModal('add-user-modal'); 
+        loadUsers(); 
+    } else { 
+        Swal.fire('Error', 'Failed to create user. Email might exist.', 'error'); 
+    }
 }
