@@ -9,7 +9,8 @@ if (!token || role !== 'student') {
 }
 
 // display user name
-document.getElementById('user-name').textContent = localStorage.getItem('fullName');
+const storedName = localStorage.getItem('full_name') || localStorage.getItem('fullName') || 'Student';
+document.getElementById('user-name').textContent = storedName;
 
 // set minimum date to today
 const dateInput = document.getElementById('book-date'); 
@@ -142,6 +143,8 @@ function displayAppointments(appointments) {
     container.innerHTML = appointments.map(apt => {
         // format date nice
         const niceDate = new Date(apt.appointment_date).toDateString();
+        // format time nice
+        const niceTime = formatTime(apt.appointment_time);
         
         // capitalize status
         const statusLabel = apt.status.charAt(0).toUpperCase() + apt.status.slice(1);
@@ -158,13 +161,31 @@ function displayAppointments(appointments) {
             `;
         }
 
-        // button logic
-        let actionButton = '';
+        // --- BUTTON LOGIC (FIXED) ---
+        let actionButtonsHtml = '';
         
         if (apt.status === 'pending') {
-            actionButton = `<button onclick="cancelAppointment(${apt.id})" class="btn-cancel">Cancel Request</button>`;
-        } else {
-            actionButton = `<button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828;">Delete History</button>`;
+            // Pending: Cancel only
+            actionButtonsHtml = `<button onclick="cancelAppointment(${apt.id})" class="btn-cancel">Cancel Request</button>`;
+        } 
+        else if (apt.status === 'approved') {
+            // Approved: Download Ticket only
+            actionButtonsHtml = `
+                <button onclick='generateTicket(${JSON.stringify(apt)})' class="btn-primary" style="background-color:#2ecc71;">
+                    <i class="fas fa-download"></i> Download Ticket
+                </button>`;
+        } 
+        else if (apt.status === 'completed') {
+             // Completed: Show "Done" text AND allow deletion
+             actionButtonsHtml = `
+                <div style="display:flex; flex-direction:column; gap:5px; width:100%;">
+                    <span style="color:green; font-weight:bold; text-align:left; padding:5px;">Visit Completed ✅</span>
+                    <button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828;">Delete History</button>
+                </div>`;
+        } 
+        else {
+            // Rejected or Canceled: Delete only
+            actionButtonsHtml = `<button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828;">Delete History</button>`;
         }
 
         return `
@@ -174,7 +195,7 @@ function displayAppointments(appointments) {
                 <span class="status-pill ${apt.status}">${statusLabel}</span>
             </div>
             <div class="apt-body">
-                <p><strong>Time:</strong> ${apt.appointment_time}</p>
+                <p><strong>Time:</strong> ${niceTime}</p>
                 <p><strong>Service:</strong> ${apt.service_type || 'General'}</p>
                 <p><strong>Urgency:</strong> ${apt.urgency || 'Low'}</p>
                 <p><strong>Reason:</strong> ${apt.reason}</p>
@@ -183,11 +204,66 @@ function displayAppointments(appointments) {
                 ${adminNoteHtml}
             </div>
             <div class="apt-actions">
-                ${actionButton}
+                ${actionButtonsHtml}
             </div>
         </div>
         `;
     }).join('');
+}
+
+// generate ticket png
+function generateTicket(apt) {
+    // 1. fill data
+    document.getElementById('pdf-name').textContent = apt.student_name || 'Student'; 
+    document.getElementById('pdf-date').textContent = apt.appointment_date;
+    // use helper to show AM/PM on ticket
+    document.getElementById('pdf-time').textContent = formatTime(apt.appointment_time);
+    document.getElementById('pdf-service').textContent = apt.service_type;
+    document.getElementById('pdf-id').textContent = `#${apt.id}`;
+
+    // 2. generate qr code
+    const qrContainer = document.getElementById('pdf-qr-code');
+    qrContainer.innerHTML = ""; 
+    new QRCode(qrContainer, {
+        text: String(apt.id),
+        width: 120,
+        height: 120,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+
+    // 3. create image using html2canvas
+    Swal.fire({
+        title: 'Generating Ticket...',
+        text: 'Please wait a moment.',
+        didOpen: () => { Swal.showLoading() }
+    });
+
+    // wait for qr code to fully render
+    setTimeout(() => {
+        const element = document.getElementById('ticket-template');
+        
+        html2canvas(element).then(canvas => {
+            // convert canvas to image url
+            const imgData = canvas.toDataURL("image/png");
+            
+            // create temporary link to download
+            const link = document.createElement('a');
+            link.download = `Ticket_${apt.id}.png`;
+            link.href = imgData;
+            link.click();
+            
+            Swal.close();
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Downloaded!',
+                text: 'Your ticket has been saved as an image.',
+                confirmButtonColor: '#1E88E5'
+            });
+        });
+    }, 500); 
 }
 
 async function deleteHistory(id) {
@@ -315,6 +391,21 @@ if(chatInput) {
 
 function handleEnter(e) {
     if (e.key === 'Enter') sendChatMessage();
+}
+
+// helper to convert 24h to 12h AM/PM
+function formatTime(timeStr) {
+    if (!timeStr) return "";
+    
+    // handles "13:30:00" or "13:30"
+    const [hours, minutes] = timeStr.split(':');
+    let hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    
+    hour = hour % 12;
+    hour = hour ? hour : 12; // the hour '0' should be '12'
+    
+    return `${hour}:${minutes} ${ampm}`;
 }
 
 loadAppointments();

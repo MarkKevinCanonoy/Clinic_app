@@ -21,7 +21,7 @@ document.getElementById("login-form").addEventListener("submit", async function(
             localStorage.setItem("user_id", data.user_id);
             localStorage.setItem("full_name", data.full_name || "User"); 
 
-            // Success Animation (Toast)
+            // success animation (toast)
             const Toast = Swal.mixin({
                 toast: true,
                 position: 'top-end',
@@ -38,7 +38,7 @@ document.getElementById("login-form").addEventListener("submit", async function(
                 icon: 'success',
                 title: 'Signed in successfully'
             }).then(() => {
-                // Redirect based on role
+                // redirect based on role
                 if (data.role === "student") {
                     window.location.href = "student-dashboard.html";
                 } else if (data.role === "admin" || data.role === "super_admin") {
@@ -47,15 +47,27 @@ document.getElementById("login-form").addEventListener("submit", async function(
             });
 
         } else {
-            // Invalid Credentials Alert
+            // --- FIX IS HERE ---
+            let errorText = 'Invalid email or password.';
+
+            // if status is 422, it means the input format is wrong (e.g. bad email)
+            if (response.status === 422) {
+                errorText = "Please enter a valid email address format.";
+            } 
+            // otherwise, use the server message if it's a simple string
+            else if (data.detail && typeof data.detail === 'string') {
+                errorText = data.detail;
+            }
+
             Swal.fire({
                 icon: 'error',
                 title: 'Login Failed',
-                text: data.detail || 'Invalid email or password.',
+                text: errorText,
                 confirmButtonColor: '#e74c3c'
             });
         }
     } catch (error) {
+        console.error(error);
         Swal.fire({
             icon: 'error',
             title: 'Server Error',

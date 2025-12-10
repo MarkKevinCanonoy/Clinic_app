@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="style.css"> 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -103,8 +106,7 @@
                         <span style="font-size: 0.8rem;">● Online</span>
                     </div>
                     <div class="chat-container">
-                        <div id="chat-messages" class="chat-messages">
-                            </div>
+                        <div id="chat-messages" class="chat-messages"></div>
                         <div class="chat-input-container">
                             <input type="text" id="chat-input" placeholder="Type your message..." onkeypress="handleEnter(event)">
                             <button onclick="sendChatMessage()" class="btn-send">
@@ -125,6 +127,7 @@
                             <option value="approved">Approved</option>
                             <option value="rejected">Rejected</option>
                             <option value="canceled">Canceled</option>
+                            <option value="completed">Completed</option>
                         </select>
                         <button onclick="loadAppointments()" class="btn-refresh">
                             <i class="fas fa-sync-alt"></i> Refresh
@@ -135,6 +138,29 @@
             </div>
 
         </main>
+    </div>
+
+    <div id="ticket-template" style="position: absolute; left: -9999px; width: 400px; padding: 20px; font-family: 'Segoe UI', sans-serif; border: 2px solid #333; background: white; border-radius: 10px;">
+        <div style="text-align: center; border-bottom: 2px solid #1E88E5; padding-bottom: 10px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #1E88E5; font-size: 1.5rem;">CLINIC PASS</h2>
+            <p style="margin: 5px 0; font-size: 0.9rem; color: #666;">Official Entry Ticket</p>
+        </div>
+        
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="margin: 5px 0;"><strong>Name:</strong> <span id="pdf-name">Student Name</span></p>
+            <p style="margin: 5px 0;"><strong>Service:</strong> <span id="pdf-service">Checkup</span></p>
+            <p style="margin: 5px 0;"><strong>Date:</strong> <span id="pdf-date">2025-10-20</span></p>
+            <p style="margin: 5px 0;"><strong>Time:</strong> <span id="pdf-time">10:00 AM</span></p>
+        </div>
+
+        <div style="display: flex; justify-content: center; margin-bottom: 10px;">
+            <div id="pdf-qr-code" style="padding: 10px; background: white; border: 1px solid #ddd;"></div> 
+        </div>
+    
+        <div style="text-align: center; font-size: 0.8rem; color: #888;">
+            <p>Scan this at the admin desk.</p>
+            <p>ID: <span id="pdf-id">#123</span></p>
+        </div>
     </div>
 
     <footer class="footer">

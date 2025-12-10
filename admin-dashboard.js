@@ -1,6 +1,7 @@
 const API_URL = 'http://localhost:8000/api';
 let allAppointments = [];
 let currentAppointmentId = null;
+let html5QrcodeScanner = null; // scanner variable
 
 // authentication check
 const token = localStorage.getItem('token');
@@ -8,7 +9,6 @@ const role = localStorage.getItem('role');
 const fullName = localStorage.getItem('full_name') || 'Admin';
 
 if (!token || (role !== 'admin' && role !== 'super_admin')) {
-    // using sweetalert for cleaner redirect
     Swal.fire({
         icon: 'error',
         title: 'Unauthorized',
@@ -39,6 +39,13 @@ function showTab(tabName) {
     document.getElementById(tabName + '-tab').style.display = 'block';
     event.currentTarget.classList.add('active');
     
+    // scanner logic
+    if (tabName === 'scanner') {
+        startScanner();
+    } else {
+        stopScanner();
+    }
+
     if (tabName === 'appointments') loadAppointments();
     if (tabName === 'users') loadUsers();
 }
@@ -58,6 +65,90 @@ function logout() {
             window.location.href = 'index.html';
         }
     });
+}
+
+// --- scanner logic ---
+
+function startScanner() {
+    if (html5QrcodeScanner) return; 
+
+    // start camera
+    html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader", { fps: 10, qrbox: 250 }
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+}
+
+function stopScanner() {
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(error => {
+            console.error("Failed to clear scanner", error);
+        });
+        html5QrcodeScanner = null;
+    }
+}
+
+async function onScanSuccess(decodedText, decodedResult) {
+    stopScanner(); // stop scanning once found
+    
+    const appointmentId = decodedText;
+    document.getElementById('scan-result').innerHTML = `Processing ID: ${appointmentId}...`;
+
+    try {
+        // update status to completed
+        const response = await fetch(`${API_URL}/appointments/${appointmentId}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ 
+                status: 'completed', 
+                admin_note: 'Verified via QR Scan' 
+            })
+        });
+
+        const data = await response.json();
+
+        // check if success
+        if (response.ok) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Verified! ✅',
+                text: `Student is cleared for entry. (ID: ${appointmentId})`,
+                timer: 2500,
+                showConfirmButton: false
+            }).then(() => {
+                document.getElementById('scan-result').innerHTML = "Ready for next student.";
+                startScanner(); // restart
+            });
+        } 
+        // check for specific "already scanned" error
+        else if (data.detail === "ALREADY_SCANNED") {
+            Swal.fire({
+                icon: 'warning',
+                title: 'ALREADY USED ⚠️',
+                text: 'This ticket has already been scanned!',
+                confirmButtonColor: '#f39c12'
+            }).then(() => {
+                startScanner(); // restart so admin can scan the next one
+            });
+        }
+        else {
+            // generic error
+            Swal.fire('Error', data.detail || 'Server Error', 'error');
+            setTimeout(startScanner, 2000); 
+        }
+
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Connection Error', 'error');
+        setTimeout(startScanner, 2000);
+    }
+}
+
+function onScanFailure(error) {
+    // console.warn(`code scan error = ${error}`);
 }
 
 // --- appointment logic ---
@@ -125,9 +216,12 @@ function displayAppointments(data) {
         // admins can delete any appointment now
         const showDelete = true; 
 
+        // [UPDATED] use formatTime helper
+        const niceTime = formatTime(apt.appointment_time);
+
         const row = `
             <tr>
-                <td>${formatDate(apt.appointment_date)}<br><small>${formatTime(apt.appointment_time)}</small></td>
+                <td>${formatDate(apt.appointment_date)}<br><small>${niceTime}</small></td>
                 <td>
                     <span style="font-weight:bold">${apt.student_name}</span><br>
                     <small style="color:#666">${apt.student_email || ''}</small>
@@ -178,10 +272,20 @@ async function deleteAppointment(id) {
 function formatDate(d) {
     return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function formatTime(t) {
-    const [h, m] = t.split(':');
-    const d = new Date(); d.setHours(h, m);
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+// [UPDATED] Helper to convert 24h to 12h AM/PM
+function formatTime(timeStr) {
+    if (!timeStr) return "";
+    
+    // handles "13:30:00" or "13:30"
+    const [hours, minutes] = timeStr.split(':');
+    let hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    
+    hour = hour % 12;
+    hour = hour ? hour : 12; // the hour '0' should be '12'
+    
+    return `${hour}:${minutes} ${ampm}`;
 }
 
 function openAppointmentModal(id) {
@@ -252,7 +356,6 @@ async function loadUsers() {
         }
 
         users.forEach(u => {
-            // colors
             let roleColor = '#333';
             let roleLabel = 'Student';
 
