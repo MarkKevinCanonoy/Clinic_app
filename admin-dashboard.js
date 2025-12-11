@@ -193,7 +193,25 @@ function applyFiltersAndSort() {
         return matchesStatus && matchesSearch && matchesType;
     });
 
-    filtered.sort((a, b) => new Date(b.appointment_date) - new Date(a.appointment_date));
+    // --- smart sort logic ---
+    const statusPriority = {
+        'pending': 1,
+        'approved': 2,
+        'completed': 3,
+        'rejected': 3,
+        'canceled': 3
+    };
+
+    filtered.sort((a, b) => {
+        const priorityA = statusPriority[a.status] || 99;
+        const priorityB = statusPriority[b.status] || 99;
+
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB; 
+        }
+        return new Date(b.appointment_date) - new Date(a.appointment_date);
+    });
+
     displayAppointments(filtered);
 }
 
@@ -210,13 +228,8 @@ function displayAppointments(data) {
         const urgency = apt.urgency || 'Low';
         const urgencyClass = (urgency.toLowerCase() === 'urgent' || urgency.toLowerCase() === 'high') ? 'color: var(--danger); font-weight:bold;' : 'color: var(--success);';
         
-        // capitalize status
         const statusLabel = apt.status.charAt(0).toUpperCase() + apt.status.slice(1);
-
-        // admins can delete any appointment now
         const showDelete = true; 
-
-        // [UPDATED] use formatTime helper
         const niceTime = formatTime(apt.appointment_time);
 
         const row = `
@@ -273,21 +286,17 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// [UPDATED] Helper to convert 24h to 12h AM/PM
 function formatTime(timeStr) {
     if (!timeStr) return "";
-    
-    // handles "13:30:00" or "13:30"
     const [hours, minutes] = timeStr.split(':');
     let hour = parseInt(hours);
     const ampm = hour >= 12 ? 'PM' : 'AM';
-    
     hour = hour % 12;
-    hour = hour ? hour : 12; // the hour '0' should be '12'
-    
+    hour = hour ? hour : 12; 
     return `${hour}:${minutes} ${ampm}`;
 }
 
+// [UPDATED] logic to hide actions if not pending
 function openAppointmentModal(id) {
     const apt = allAppointments.find(a => a.id === id);
     if(!apt) return;
@@ -298,12 +307,28 @@ function openAppointmentModal(id) {
         <p><strong>Service:</strong> ${apt.service_type}</p>
         <p><strong>Urgency:</strong> ${apt.urgency}</p>
         <p><strong>Reason:</strong> ${apt.reason}</p>
+        <p><strong>Status:</strong> ${apt.status.toUpperCase()}</p>
         <hr style="margin: 10px 0; border: 0; border-top: 1px solid #eee;">
         ${apt.admin_note ? `<div class="admin-note-box"><strong>Current Note:</strong> ${apt.admin_note}</div>` : ''}
     `;
-    document.getElementById('reject-form').style.display = 'none';
+    
+    // --- fix is here ---
+    const actionButtons = document.querySelector('.modal-actions');
+    const rejectForm = document.getElementById('reject-form');
+    
+    // reset visibility
+    rejectForm.style.display = 'none';
+
+    // if status is NOT pending, hide the approve/reject buttons
+    if (apt.status !== 'pending') {
+        actionButtons.style.display = 'none';
+    } else {
+        actionButtons.style.display = 'flex'; // show them if pending
+    }
+
     document.getElementById('appointment-modal').style.display = 'flex';
 }
+
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function showRejectForm() { document.getElementById('reject-form').style.display = 'block'; }
 
@@ -318,7 +343,6 @@ async function updateAppointmentStatus(status) {
     
     closeModal('appointment-modal');
     
-    // success toast
     Swal.fire({
         icon: 'success',
         title: 'Updated!',
@@ -337,7 +361,6 @@ async function loadUsers() {
         const response = await fetch(`${API_URL}/users`, { headers: { 'Authorization': `Bearer ${token}` } });
         let users = await response.json();
         
-        // filter logic
         const filterElement = document.getElementById('user-role-filter');
         const filter = filterElement ? filterElement.value : 'all';
 

@@ -8,7 +8,7 @@ if (!token || role !== 'student') {
     window.location.href = 'index.html';
 }
 
-// display user name
+// display user name - trying both keys just in case
 const storedName = localStorage.getItem('full_name') || localStorage.getItem('fullName') || 'Student';
 document.getElementById('user-name').textContent = storedName;
 
@@ -161,22 +161,25 @@ function displayAppointments(appointments) {
             `;
         }
 
-        // --- BUTTON LOGIC (FIXED) ---
+        // --- fixed button logic here ---
         let actionButtonsHtml = '';
         
         if (apt.status === 'pending') {
-            // Pending: Cancel only
+            // pending: cancel only
             actionButtonsHtml = `<button onclick="cancelAppointment(${apt.id})" class="btn-cancel">Cancel Request</button>`;
         } 
         else if (apt.status === 'approved') {
-            // Approved: Download Ticket only
+            // approved: download ticket AND delete (cancel) button
             actionButtonsHtml = `
-                <button onclick='generateTicket(${JSON.stringify(apt)})' class="btn-primary" style="background-color:#2ecc71;">
-                    <i class="fas fa-download"></i> Download Ticket
-                </button>`;
+                <div style="display:flex; flex-direction:column; gap:5px; width:100%;">
+                    <button onclick='generateTicket(${JSON.stringify(apt)})' class="btn-primary" style="background-color:#2ecc71;">
+                        <i class="fas fa-download"></i> Download Ticket
+                    </button>
+                    <button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828;">Cancel Appointment</button>
+                </div>`;
         } 
         else if (apt.status === 'completed') {
-             // Completed: Show "Done" text AND allow deletion
+             // completed: text AND delete history
              actionButtonsHtml = `
                 <div style="display:flex; flex-direction:column; gap:5px; width:100%;">
                     <span style="color:green; font-weight:bold; text-align:left; padding:5px;">Visit Completed ✅</span>
@@ -184,7 +187,7 @@ function displayAppointments(appointments) {
                 </div>`;
         } 
         else {
-            // Rejected or Canceled: Delete only
+            // rejected or canceled: delete only
             actionButtonsHtml = `<button onclick="deleteHistory(${apt.id})" class="btn-cancel" style="background-color: #ffcdd2; color: #c62828;">Delete History</button>`;
         }
 
@@ -216,7 +219,7 @@ function generateTicket(apt) {
     // 1. fill data
     document.getElementById('pdf-name').textContent = apt.student_name || 'Student'; 
     document.getElementById('pdf-date').textContent = apt.appointment_date;
-    // use helper to show AM/PM on ticket
+    // use helper to show am/pm on ticket
     document.getElementById('pdf-time').textContent = formatTime(apt.appointment_time);
     document.getElementById('pdf-service').textContent = apt.service_type;
     document.getElementById('pdf-id').textContent = `#${apt.id}`;
@@ -268,13 +271,13 @@ function generateTicket(apt) {
 
 async function deleteHistory(id) {
     Swal.fire({
-        title: 'Remove from history?',
-        text: "This action cannot be undone.",
+        title: 'Are you sure?',
+        text: "You are about to remove this appointment.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it!'
+        confirmButtonText: 'Yes, proceed'
     }).then(async (result) => {
         if (result.isConfirmed) {
             await deleteOrCancel(id, 'Appointment removed.');
@@ -393,17 +396,16 @@ function handleEnter(e) {
     if (e.key === 'Enter') sendChatMessage();
 }
 
-// helper to convert 24h to 12h AM/PM
+// helper to convert 24h to 12h am/pm
 function formatTime(timeStr) {
     if (!timeStr) return "";
     
-    // handles "13:30:00" or "13:30"
     const [hours, minutes] = timeStr.split(':');
     let hour = parseInt(hours);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     
     hour = hour % 12;
-    hour = hour ? hour : 12; // the hour '0' should be '12'
+    hour = hour ? hour : 12; 
     
     return `${hour}:${minutes} ${ampm}`;
 }

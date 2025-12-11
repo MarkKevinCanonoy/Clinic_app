@@ -367,13 +367,39 @@ def delete_user(user_id: int, current_user = Depends(get_current_user)):
 #   logic based chatbot for booking appointments
 # ==========================================
 # global dictionary to store user states in memory
+# --- helper: smart date calculator ---
+def get_next_weekday(day_name):
+    """
+    Calculates the date for 'next monday', 'this friday', etc.
+    """
+    days = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, 
+        "friday": 4, "saturday": 5, "sunday": 6,
+        "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6
+    }
+    
+    target_day = days.get(day_name)
+    if target_day is None: return None
+    
+    today = datetime.now()
+    current_day = today.weekday()
+    
+    # calculate days to add
+    days_ahead = target_day - current_day
+    if days_ahead <= 0: # if today is Tuesday and user asks for Monday, go to next week
+        days_ahead += 7
+        
+    future_date = today + timedelta(days=days_ahead)
+    return future_date.strftime("%Y-%m-%d")
+
+# global dictionary for memory
 chat_states = {}
 
 @app.post("/api/chat")
 async def chat_booking(chat: ChatMessage, current_user = Depends(get_current_user)):
     """
-    Smarter Logic-Based Chatbot.
-    Fixed: No more RecursionError.
+    Smart Logic-Based Chatbot V2.
+    Fixed: 'Medical Clearance' bug, Casual Chit-Chat, and robust extraction.
     """
     
     # 1. Access Control
@@ -388,41 +414,73 @@ async def chat_booking(chat: ChatMessage, current_user = Depends(get_current_use
         chat_states[user_id] = {"step": "idle", "data": {}}
 
     state = chat_states[user_id]
-    
-    # --- Reset Logic ---
-    if any(w in message for w in ["cancel", "stop", "reset", "wrong"]):
-        chat_states[user_id] = {"step": "idle", "data": {}}
-        return {"response": "Okay, I've cleared everything. 🔄 Start again by saying 'Hi' or 'Book'.", "requires_action": False}
-
-    # ==================================================
-    # STEP 1: SMART EXTRACTION (Always runs)
-    # ==================================================
     current_data = state["data"]
+    
+    # --- Reset/Cancel Logic (High Priority) ---
+    if any(w in message for w in ["cancel", "stop", "reset", "wrong", "change"]):
+        chat_states[user_id] = {"step": "idle", "data": {}}
+        return {"response": "Okay, I've reset everything. 🔄 \n\nHow can I help you?", "requires_action": False}
 
-    # a. Service
-    if "consultation" in message: current_data["service_type"] = "Medical Consultation"
-    elif "clearance" in message: current_data["service_type"] = "Medical Clearance"
+    # --- Casual Chit-Chat Logic (High Priority) ---
+    # Only if we are not in the middle of saving or deep in a flow
+    if state["step"] == "idle" or len(current_data) == 0:
+        if any(w in message for w in ["thank", "thanks", "salamat", "arigato"]):
+            return {"response": "You're very welcome! 💙 Stay healthy!", "requires_action": False}
+        
+        if any(w in message for w in ["bye", "goodbye", "see you"]):
+            return {"response": "Goodbye! Take care! 👋", "requires_action": False}
+        
+        greetings = ["good morning", "good afternoon", "good evening", "hi", "hello", "hey", "musta"]
+        if any(g in message for g in greetings):
+             # If they just said "Good morning", greet them. 
+             # If they said "Good morning I need a checkup", we continue to extraction.
+            intent_keywords = ["book", "appointment", "schedule", "clearance", "consultation", "medical"]
+            if not any(k in message for k in intent_keywords):
+                return {"response": "Hello! 👋 How can I help you today? \n\nYou can say 'I need a medical clearance' or 'Book a consultation'.", "requires_action": False}
 
-    # b. Urgency
-    if "urgent" in message: current_data["urgency"] = "Urgent"
-    elif "normal" in message: current_data["urgency"] = "Normal"
+    # ==================================================
+    # STEP 1: SMART EXTRACTION (The Brain 🧠)
+    # ==================================================
 
-    # c. Date
+    # A. Service Detection (FIXED: Check 'clearance' BEFORE 'medical')
+    if "clearance" in message:
+        current_data["service_type"] = "Medical Clearance"
+    elif "consultation" in message or "checkup" in message or "check-up" in message:
+        current_data["service_type"] = "Medical Consultation"
+    elif "medical" in message and "service_type" not in current_data:
+        # If they just say "medical appointment", assume consultation but it's weak
+        current_data["service_type"] = "Medical Consultation"
+
+    # B. Urgency Detection
+    if "urgent" in message or "emergency" in message or "pain" in message or "asap" in message:
+        current_data["urgency"] = "Urgent"
+    elif "normal" in message or "routine" in message:
+        current_data["urgency"] = "Normal"
+
+    # C. Date Detection
     if "tomorrow" in message:
         current_data["appointment_date"] = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    elif "today" in message:
+        current_data["appointment_date"] = datetime.now().strftime("%Y-%m-%d")
     else:
+        # Regex for YYYY-MM-DD
         date_match = re.search(r'(\d{4}-\d{2}-\d{2})', message)
         if date_match:
-            try:
-                input_date = datetime.strptime(date_match.group(1), "%Y-%m-%d").date()
-                if input_date >= datetime.now().date():
-                    current_data["appointment_date"] = date_match.group(1)
-            except ValueError: pass
+            current_data["appointment_date"] = date_match.group(1)
+        else:
+            # Day names (Monday, Tuesday...)
+            days_list = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+            for day in days_list:
+                if day in message:
+                    smart_date = get_next_weekday(day)
+                    if smart_date:
+                        current_data["appointment_date"] = smart_date
+                    break
 
-    # d. Time
-    # 12-hour (2:30pm)
+    # D. Time Detection
+    # 12-hour format (e.g., 2:30pm, 2pm, 2 pm)
     ampm_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', message)
-    # 24-hour (14:00)
+    # 24-hour format (e.g., 14:00)
     military_match = re.search(r'(\d{1,2}):(\d{2})(?!\s*(?:am|pm))', message)
 
     if ampm_match:
@@ -437,73 +495,87 @@ async def chat_booking(chat: ChatMessage, current_user = Depends(get_current_use
         if 0 <= h <= 23 and 0 <= m <= 59:
             current_data["appointment_time"] = f"{h:02d}:{m:02d}:00"
 
-    # e. Reason
+    # E. Reason Detection
     if "because" in message:
         parts = message.split("because", 1)
         if len(parts) > 1: current_data["reason"] = parts[1].strip()
-    elif "reason is" in message:
-        parts = message.split("reason is", 1)
-        if len(parts) > 1: current_data["reason"] = parts[1].strip()
-    
-    # Special: If we are specifically asking for a reason, take the whole message
-    if state["step"] == "asking_reason" and "reason" not in current_data:
-        current_data["reason"] = chat.message # take raw message
+    elif state["step"] == "asking_reason" and "reason" not in current_data:
+        current_data["reason"] = chat.message # If explicitly asked, take the whole input
 
+    # Save updates back to state
     chat_states[user_id]["data"] = current_data
 
     # ==================================================
-    # STEP 2: DETERMINE NEXT ACTION
+    # STEP 2: DETERMINE NEXT ACTION (The Flow 🌊)
     # ==================================================
     
-    # Start flow triggers
-    triggers = ["book", "appointment", "schedule", "visit", "consultation", "clearance"]
-    
+    # If idle, check if we should start
     if state["step"] == "idle":
-        if any(w in message for w in ["hi", "hello", "hey"]) and not any(w in message for w in triggers):
-            return {"response": "Hello! 👋 I am the Clinic AI.\n\nYou can say 'Book appointment' or give me details like: 'Book medical consultation tomorrow at 2pm'.", "requires_action": False}
-        
-        if any(w in message for w in triggers) or len(current_data) > 0:
+        if len(current_data) > 0 or any(w in message for w in ["book", "schedule", "visit"]):
             state["step"] = "check_requirements"
 
     # ==================================================
-    # STEP 3: CHECK WHAT IS MISSING
+    # STEP 3: TRAFFIC CONTROLLER (What is missing?)
     # ==================================================
     
-    # We always check requirements if not idle/saving
     if state["step"] not in ["idle", "saving"]:
         data = state["data"]
         
+        # 1. Missing Service
         if "service_type" not in data:
             chat_states[user_id]["step"] = "asking_service"
             return {"response": "I can help! 🩺\n\nIs this for a **Medical Consultation** or **Medical Clearance**?", "requires_action": False}
         
+        # 2. Missing Date
         if "appointment_date" not in data:
             chat_states[user_id]["step"] = "asking_date"
-            return {"response": f"Okay, a {data['service_type']}. 🗓️\n\nWhat date? (Format: YYYY-MM-DD or say 'tomorrow')", "requires_action": False}
+            return {"response": f"Okay, a {data['service_type']}. 🗓️\n\nWhen would you like to come? (e.g., 'Tomorrow', 'Next Monday', or '2025-10-20')", "requires_action": False}
 
+        # 3. Missing Time
         if "appointment_time" not in data:
             chat_states[user_id]["step"] = "asking_time"
-            return {"response": f"Got the date ({data['appointment_date']}). 🕒\n\nWhat time? (e.g., '2pm', '10:00 am', or '14:00')", "requires_action": False}
+            return {"response": f"Got it: {data['appointment_date']}. 🕒\n\nWhat time? (e.g., '2pm' or '10:00 am')", "requires_action": False}
 
+        # 4. Missing Urgency
         if "urgency" not in data:
             chat_states[user_id]["step"] = "asking_urgency"
-            return {"response": "Noted. Is this condition **Normal** or **Urgent**?", "requires_action": False}
+            return {"response": "Is this condition **Normal** or **Urgent**?", "requires_action": False}
 
+        # 5. Missing Reason
         if "reason" not in data:
             chat_states[user_id]["step"] = "asking_reason"
-            return {"response": "Almost done! 📝\n\nPlease briefly state the **reason** for your visit.", "requires_action": False}
+            return {"response": "Last step! 📝\n\nPlease briefly describe the **reason** for your visit.", "requires_action": False}
 
-        # If we reach here, we have EVERYTHING.
+        # All data present -> Move to Saving
         state["step"] = "saving"
 
     # ==================================================
-    # STEP 4: SAVE
+    # STEP 4: SAVE TO DATABASE (With Conflict Check)
     # ==================================================
     if state["step"] == "saving":
         data = state["data"]
+        conn = get_db()
+        cursor = conn.cursor(buffered=True)
+        
         try:
-            conn = get_db()
-            cursor = conn.cursor()
+            # 1. Availability Check
+            cursor.execute("""
+                SELECT id FROM appointments 
+                WHERE appointment_date = %s AND appointment_time = %s AND status != 'canceled'
+            """, (data['appointment_date'], data['appointment_time']))
+            
+            if cursor.fetchone():
+                # Slot is taken
+                del chat_states[user_id]["data"]["appointment_time"]
+                chat_states[user_id]["step"] = "asking_time"
+                cursor.close()
+                conn.close()
+                return {
+                    "response": f"⚠️ **Slot Taken!**\n\nThe time {data['appointment_time']} on {data['appointment_date']} is already booked.\n\nPlease choose a different time.", 
+                    "requires_action": False
+                }
+
+            # 2. Insert Appointment
             cursor.execute("""
                 INSERT INTO appointments (student_id, appointment_date, appointment_time, service_type, urgency, reason, booking_mode, status)
                 VALUES (%s, %s, %s, %s, %s, %s, 'ai_chatbot', 'pending')
@@ -513,27 +585,30 @@ async def chat_booking(chat: ChatMessage, current_user = Depends(get_current_use
             ))
             conn.commit()
             
-            # Nice display time
+            # Format time nicely for display
             display_time = datetime.strptime(data['appointment_time'], "%H:%M:%S").strftime("%I:%M %p")
 
-            response_msg = (
-                f"🎉 **Success!** Booked your {data['service_type']}.\n\n"
+            final_response = (
+                f"🎉 **Booked Successfully!**\n\n"
+                f"🩺 **Service:** {data['service_type']}\n"
                 f"📅 **Date:** {data['appointment_date']}\n"
                 f"🕒 **Time:** {display_time}\n"
                 f"📝 **Reason:** {data['reason']}\n\n"
-                "See you soon! 💙"
+                "See you at the clinic! 💙"
             )
+            
+            # Reset state for next interaction
             chat_states[user_id] = {"step": "idle", "data": {}}
-            return {"response": response_msg, "requires_action": False}
+            return {"response": final_response, "requires_action": False}
 
         except Exception as e:
             print(f"DB Error: {e}")
-            return {"response": "System error saving appointment. Please try again.", "requires_action": False}
+            return {"response": "System error. Please try again later.", "requires_action": False}
         finally:
-            if 'cursor' in locals(): cursor.close()
-            if 'conn' in locals(): conn.close()
+            if 'cursor' in locals() and cursor: cursor.close()
+            if 'conn' in locals() and conn: conn.close()
 
-    return {"response": "I didn't quite get that. Try saying 'reset' or check your spelling.", "requires_action": False}
+    return {"response": "I didn't quite catch that. Try saying 'reset' if you're stuck.", "requires_action": False}
 
 if __name__ == "__main__":
     import uvicorn

@@ -47,10 +47,9 @@ document.getElementById("login-form").addEventListener("submit", async function(
             });
 
         } else {
-            // --- FIX IS HERE ---
             let errorText = 'Invalid email or password.';
 
-            // if status is 422, it means the input format is wrong (e.g. bad email)
+            // if status is 422, it means the input format is wrong
             if (response.status === 422) {
                 errorText = "Please enter a valid email address format.";
             } 
@@ -76,3 +75,33 @@ document.getElementById("login-form").addEventListener("submit", async function(
         });
     }
 });
+/*
+async function forgotPassword() {
+    const { value: email } = await Swal.fire({
+        title: 'Reset Password',
+        input: 'email',
+        inputLabel: 'Enter your email address',
+        inputPlaceholder: 'student@evsu.edu.ph',
+        showCancelButton: true,
+        confirmButtonText: 'Send Request',
+        confirmButtonColor: '#1E88E5',
+        cancelButtonColor: '#d33',
+        inputValidator: (value) => {
+            if (!value) {
+                return 'You need to write your email!'
+            }
+        }
+    });
+
+    if (email) {
+        // Since we don't have a real email server, we simulate the success
+        Swal.fire({
+            icon: 'success',
+            title: 'Request Sent',
+            text: `If an account exists for ${email}, please contact the System Administrator to complete your password reset.`,
+            confirmButtonColor: '#1E88E5'
+        });
+    }
+}
+
+*/
