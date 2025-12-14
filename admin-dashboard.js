@@ -114,7 +114,7 @@ async function onScanSuccess(decodedText, decodedResult) {
         if (response.ok) {
             Swal.fire({
                 icon: 'success',
-                title: 'Verified! ✅',
+                title: 'Verified!',
                 text: `Student is cleared for entry. (ID: ${appointmentId})`,
                 timer: 2500,
                 showConfirmButton: false
@@ -127,7 +127,7 @@ async function onScanSuccess(decodedText, decodedResult) {
         else if (data.detail === "ALREADY_SCANNED") {
             Swal.fire({
                 icon: 'warning',
-                title: 'ALREADY USED ⚠️',
+                title: 'ALREADY USED',
                 text: 'This ticket has already been scanned!',
                 confirmButtonColor: '#f39c12'
             }).then(() => {

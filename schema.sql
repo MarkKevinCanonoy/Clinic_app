@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS school_clinic;
 USE school_clinic;
 
--- users table (students, admins, super_admins)
+-- 1. Users Table
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     full_name VARCHAR(255) NOT NULL,
@@ -12,22 +12,30 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- appointments table
+-- 2. Appointments Table (UPDATED)
 CREATE TABLE appointments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     student_id INT NOT NULL,
+    
+    -- New Fields Required by your Code
+    service_type VARCHAR(100) NOT NULL,  -- Stores "Medical Consultation" or "Medical Clearance"
+    urgency ENUM('Normal', 'Urgent') DEFAULT 'Normal',        -- Stores "Normal" or "Urgent"
+    
     appointment_date DATE NOT NULL,
     appointment_time TIME NOT NULL,
     reason TEXT NOT NULL,
+    
     booking_mode ENUM('standard', 'ai_chatbot') DEFAULT 'standard',
-    status ENUM('pending', 'approved', 'rejected', 'canceled') DEFAULT 'pending',
+    status ENUM('pending', 'approved', 'rejected', 'canceled', 'completed') DEFAULT 'pending',
     admin_note TEXT,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- chat history table (for AI chatbot conversations)
+-- 3. Chat History Table
 CREATE TABLE chat_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     student_id INT NOT NULL,
@@ -38,4 +46,3 @@ CREATE TABLE chat_history (
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL
 );
-
